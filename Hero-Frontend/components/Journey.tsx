@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState } from "react";
-import lottie from "lottie-web";
 import { motion, useScroll } from "framer-motion";
 import { Progress } from "@nextui-org/progress";
 import { Button } from "@nextui-org/react";
@@ -21,57 +20,36 @@ const NoiseOverlay = () => {
       <div className="noise-overlay" />
       <style>
         {`
-        .noise-overlay {
-          content: "";
-          z-index: 50;
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          pointer-events: none;
-          opacity: 0.5;
-          background: url(https://herdl.com/wp-content/uploads/2020/11/noise-web.webp);
-          background-repeat: repeat;
-          background-size: auto;
-          animation: noise 100ms infinite;
-          mix-blend-mode: multiply;
-        }
+          .noise-overlay {
+            content: "";
+            z-index: 50;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.5;
+            background: url(https://herdl.com/wp-content/uploads/2020/11/noise-web.webp);
+            background-repeat: repeat;
+            background-size: auto;
+            animation: noise 100ms infinite;
+            mix-blend-mode: multiply;
+          }
 
-        @keyframes noise {
-          0%,
-          100% {
-            background-position: 0% 0%;
+          @keyframes noise {
+            0%, 100% { background-position: 0% 0%; }
+            10% { background-position: -5% -10%; }
+            20% { background-position: -15% 5%; }
+            30% { background-position: 7% -25%; }
+            40% { background-position: 20% 25%; }
+            50% { background-position: -25% 10%; }
+            60% { background-position: 15% 5%; }
+            70% { background-position: 0% 15%; }
+            80% { background-position: 25% 35%; }
+            90% { background-position: -10% 10%; }
           }
-          10% {
-            background-position: -5% -10%;
-          }
-          20% {
-            background-position: -15% 5%;
-          }
-          30% {
-            background-position: 7% -25%;
-          }
-          40% {
-            background-position: 20% 25%;
-          }
-          50% {
-            background-position: -25% 10%;
-          }
-          60% {
-            background-position: 15% 5%;
-          }
-          70% {
-            background-position: 0% 15%;
-          }
-          80% {
-            background-position: 25% 35%;
-          }
-          90% {
-            background-position: -10% 10%;
-          }
-        }
-      `}
+        `}
       </style>
     </>
   );
@@ -100,64 +78,66 @@ const LottieScrollAnimation: React.FC = () => {
 
   useEffect(() => {
     const unsubscribeScroll = scrollYProgress.on("change", (latest) => {
-      if (latest > 0.95) {
-        setShowFinalContent(true);
-      } else {
-        setShowFinalContent(false);
-      }
+      setShowFinalContent(latest > 0.95);
     });
 
     return () => unsubscribeScroll();
   }, [scrollYProgress]);
 
   useEffect(() => {
-    const container = lottieContainerRef.current;
-    if (!container) return;
+    async function loadLottie() {
+      if (typeof window !== "undefined" && lottieContainerRef.current) {
+        const lottie = await import("lottie-web");
+        const anim = lottie.default.loadAnimation({
+          container: lottieContainerRef.current,
+          renderer: "svg",
+          loop: false,
+          autoplay: false,
+          path: "/data.json",
+        }) as AnimationInstance;
 
-    const anim = lottie.loadAnimation({
-      container,
-      renderer: "svg",
-      loop: false,
-      autoplay: false,
-      path: "/data.json",
-    }) as AnimationInstance;
-
-    anim.addEventListener("data_ready", () => {
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 600);
-    });
-
-    anim.addEventListener("data_failed", () => {
-      setIsLoading(false);
-      console.error("Failed to load animation");
-    });
-
-    const handleScroll = () => {
-      if (anim) {
-        const progress = scrollYProgress.get();
-        const frame = Math.round(progress * (anim.totalFrames - 1));
-        anim.goToAndStop(frame, true);
-      }
-    };
-
-    const unsubscribeProgress = scrollYProgress.on("change", handleScroll);
-
-    let progressInterval: NodeJS.Timeout;
-    if (isLoading) {
-      progressInterval = setInterval(() => {
-        setLoadingProgress((prev) => {
-          if (prev >= 90) return prev;
-          return Math.min(prev + 1, 90);
+        anim.addEventListener("data_ready", () => {
+          setTimeout(() => {
+            setIsLoading(false);
+          }, 600);
         });
-      }, 50);
+
+        anim.addEventListener("data_failed", () => {
+          setIsLoading(false);
+          console.error("Failed to load animation");
+        });
+
+        const handleScroll = () => {
+          if (anim) {
+            const progress = scrollYProgress.get();
+            const frame = Math.round(progress * (anim.totalFrames - 1));
+            anim.goToAndStop(frame, true);
+          }
+        };
+
+        const unsubscribeProgress = scrollYProgress.on("change", handleScroll);
+
+        let progressInterval: NodeJS.Timeout;
+        if (isLoading) {
+          progressInterval = setInterval(() => {
+            setLoadingProgress((prev) => {
+              if (prev >= 90) return prev;
+              return Math.min(prev + 1, 90);
+            });
+          }, 50);
+        }
+
+        setAnimation(anim);
+
+        return () => {
+          anim.destroy();
+          unsubscribeProgress();
+          if (progressInterval) clearInterval(progressInterval);
+        };
+      }
     }
 
-    return () => {
-      anim.destroy();
-      unsubscribeProgress();
-      if (progressInterval) clearInterval(progressInterval);
-    };
+    loadLottie();
   }, [scrollYProgress]);
 
   return (
